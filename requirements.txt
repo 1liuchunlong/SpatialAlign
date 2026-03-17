@@ -1,5 +1,4 @@
 # SpatialAlign - minimal dependencies 
-# Third-party packages used by this project only
 
 # Core
 numpy==1.24.4
@@ -22,6 +21,9 @@ torch-spline-conv==1.2.2+pt20cu118
 
 # Optimal transport (ot)
 POT==0.9.5
+
+# KNN for spatial graph
+pynndescent>=0.5.0
 
 # Logging
 swanlab==0.6.1

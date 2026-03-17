@@ -3,14 +3,13 @@ import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
 from sklearn.metrics import accuracy_score, adjusted_rand_score, normalized_mutual_info_score, classification_report
 import scanpy as sc
-from dnn import Encoder, ClassifierHead
+from .dnn import Encoder, ClassifierHead
 import numpy as np
-import swanlab
-from losses import FocalLoss
+from .losses import FocalLoss
 import torch.optim as optim
 from sklearn.preprocessing import LabelEncoder
 from collections import Counter
-from ultils import augment_rare_cells
+from .ultils import augment_rare_cells
 from scipy.sparse import csr_matrix
 from torch.utils.data import WeightedRandomSampler
 import random

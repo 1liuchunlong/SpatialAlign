@@ -5,7 +5,7 @@ import numpy as np
 from sklearn.metrics import accuracy_score, classification_report
 import pandas as pd
 from torch.utils.data import Dataset, DataLoader
-from dnn import KAN_Encoder, ClassifierHead, Encoder
+from .dnn import Encoder, ClassifierHead
 import torch.nn.functional as F
 
 

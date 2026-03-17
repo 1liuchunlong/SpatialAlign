@@ -5,10 +5,10 @@ from torch.utils.data import DataLoader
 import numpy as np
 import scanpy as sc
 
-from mydatasets import SCRNADataset, STSpatialDataset, spatialCollate
-from dnn import Encoder, ClassifierHead
-from gat_encoder import GATEncoder
-from losses import cross_modal_supcon_with_queue  # 已在 losses 里实现
+from .mydatasets import SCRNADataset, STSpatialDataset, spatialCollate
+from .dnn import Encoder, ClassifierHead
+from .gat_encoder import GATEncoder
+from .losses import cross_modal_supcon_with_queue
 from sklearn.metrics.pairwise import cosine_similarity
 import ot
 from sklearn.metrics import (
@@ -113,10 +113,14 @@ def _ring_enqueue(buf, ptr_name, x):
 
 @torch.no_grad()
 def enqueue_neg_pairs(buf, zr_neg, zs_neg, y_neg):
-    # zr_neg/zs_neg: [K,D]（raw 特征），y_neg: [K]
     zr_neg = zr_neg.detach()
     zs_neg = zs_neg.detach()
     y_neg = y_neg.detach()
+    cap = buf['size']
+    if zr_neg.size(0) > cap:
+        zr_neg = zr_neg[:cap]
+        zs_neg = zs_neg[:cap]
+        y_neg = y_neg[:cap]
     _, seg, new_ptr = _ring_enqueue(buf, 'neg_ptr', zr_neg)
     if isinstance(seg, tuple):
         s1, s2 = seg
@@ -153,6 +157,25 @@ def sample_from_pairQ_neg_only(pairQ, K_neg_global=128, use_window=True):
             's': pairQ['neg_st'].index_select(0, idx),
         }
     return neg_bank
+
+
+@torch.no_grad()
+def extract_batch_neg_pairs(zr, zs, yr, ys):
+    """
+    从当前batch中提取负样本对（跨模态但不同类别）
+    """
+    B = zr.size(0)
+    yr_exp = yr.unsqueeze(1)
+    ys_exp = ys.unsqueeze(0)
+    neg_mask = (yr_exp != ys_exp)
+    neg_idx_r, neg_idx_s = neg_mask.nonzero(as_tuple=True)
+
+    if neg_idx_r.numel() == 0:
+        return None
+
+    zr_neg = zr[neg_idx_r]
+    zs_neg = zs[neg_idx_s]
+    return {'r': zr_neg, 's': zs_neg}
 
 
 # ===================== 稀有 ST 初始化：分层 Top‑K 负样 =====================
@@ -561,9 +584,9 @@ def train_for_stage2(
     mlp_stage1_path, adata_sc, adata_st,
     gat_pt_savepath, mlp_stage2_save_path,
     epochs=3,
-    K_NEG_BANK=256,
-    T_NEG_INIT=5, CAP_INIT=2000,
-    T_NEG_ONLINE=2, CAP_ONLINE=128
+    K_NEG_BANK=1024,
+    T_NEG_INIT=10, CAP_INIT=2000,
+    T_NEG_ONLINE=5, CAP_ONLINE=512
 ):
     set_seed()
     device = torch.device('cuda')
@@ -754,8 +777,24 @@ def train_for_stage2(
                 pairQ, t_per_class=T_NEG_ONLINE, cap_per_anchor=CAP_ONLINE
             )
 
-            # —— 从队列取一小撮负样进分母 ——
-            neg_bank = sample_from_pairQ_neg_only(pairQ, K_NEG_BANK, use_window=True)
+            # —— 从当前batch提取负样本对 + 从队列取负样本对 ——
+            neg_bank_batch = extract_batch_neg_pairs(zr, zs, yr, ys)
+            neg_bank_queue = sample_from_pairQ_neg_only(pairQ, K_NEG_BANK, use_window=True)
+
+            neg_bank = None
+            if neg_bank_batch is not None or neg_bank_queue is not None:
+                neg_bank = {'r': [], 's': []}
+                if neg_bank_batch is not None:
+                    neg_bank['r'].append(neg_bank_batch['r'])
+                    neg_bank['s'].append(neg_bank_batch['s'])
+                if neg_bank_queue is not None:
+                    neg_bank['r'].append(neg_bank_queue['r'])
+                    neg_bank['s'].append(neg_bank_queue['s'])
+                if len(neg_bank['r']) > 0:
+                    neg_bank['r'] = torch.cat(neg_bank['r'], dim=0)
+                    neg_bank['s'] = torch.cat(neg_bank['s'], dim=0)
+                else:
+                    neg_bank = None
 
             # —— 对比 + 分类 ——
             cross_loss = cross_modal_supcon_with_queue(
