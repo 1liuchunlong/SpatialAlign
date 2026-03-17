@@ -1,59 +1,96 @@
 # SpatialAlign
 
-Spatial transcriptomics cell type annotation via scRNA-seq alignment.
+**Prototype-anchored contrastive alignment for cell-type annotation in subcellular spatial transcriptomics.**
 
-## 复现 nsclc_1128 工作流
+SpatialAlign bridges the domain gap between reference scRNA-seq and target SST data via (i) prototype-guided contrastive learning with hard-negative queues, and (ii) unbalanced optimal transport (UOT)–based iterative pseudo-label refinement. Evaluated on CosMx, MERFISH, and Xenium, it consistently outperforms existing methods while scaling to large datasets.
 
-本仓库完全复现 `0729/nsclc_1128.ipynb` 的完整流程，包含：
+![Framework overview](Fig/SpatialAlign-FrameWork.png)
 
-1. **Stage 1**: 训练 scRNA-seq 分类器 (MLP)
-2. **伪标签推断**: 使用 Stage 1 模型对空间转录组数据进行细胞类型预测
-3. **Stage 2**: 基于伪标签训练空间 encoder (GAT)，使用 UOT 刷新伪标签
+---
 
-## 环境配置
+## Pipeline
+
+| Stage | Description |
+|-------|--------------|
+| **Stage 1** | Pretrain a DNN on labeled scRNA-seq; assign initial pseudo-labels to SST cells |
+| **Stage 2** | Learn context-aware SST embeddings with a GAT encoder; refine pseudo-labels via prototype-guided contrastive alignment + UOT |
+
+---
+
+## Setup
 
 ```bash
 pip install -r requirements.txt
 ```
 
-## 数据
+Key dependencies: Python 3.8+, PyTorch, PyTorch Geometric, scanpy, POT (optimal transport).
 
-数据已迁移至 `data/` 目录，本地完全独立、开箱即用：
+---
 
-- `sc_nsclc.h5ad` - scRNA-seq 数据
-- `lung9_rep1_15types.h5ad` - 空间转录组数据
-- `X_umap_df.csv` - 预计算的 UMAP 坐标（用于可视化）
+## Data
 
-> 若从 GitHub 克隆，因大文件未纳入版本库，需自行将上述数据放入 `data/` 目录。
+Example datasets are hosted externally. See [Data/Note.md](Data/Note.md) for download links and file descriptions.
 
-## 运行
+| File | Role |
+|------|------|
+| `sc_nsclc.h5ad` | scRNA-seq reference |
+| `lung9_rep1_15types.h5ad` | Spatial transcriptomics target |
+| `X_umap_df.csv` | Pre-computed UMAP (optional) |
 
-在 `SpatialAlign/` 根目录下启动 Jupyter，运行 `demo-nsclc.ipynb`：
+---
+
+## Run
+
+1. Download data and place files in `data/` (see [Data/Note.md](Data/Note.md)).
+2. Run the demo notebook:
 
 ```bash
-cd SpatialAlign
-jupyter notebook demo-nsclc.ipynb
+python -m jupyter notebook demo-nsclc.ipynb
 ```
 
-## 目录结构
+Or use the programmatic API:
 
+```python
+from SpatialAlign import train_model, pseudoing_label, train_for_stage2
+
+# Stage 1: pretrain DNN, align scRNA-seq and ST
+adata_sc, adata_st, prototypes = train_model(
+    adata_sc_path="data/sc_nsclc.h5ad",
+    adata_st_path="data/lung9_rep1_15types.h5ad",
+    model_save_path="output/mlp_stage1.pt",
+)
+
+# Pseudo-label inference
+adata_st = pseudoing_label(adata_st, "output/mlp_stage1.pt")
+
+# Stage 2: GAT encoder + UOT refinement
+adata_st = train_for_stage2(
+    mlp_stage1_path="output/mlp_stage1.pt",
+    adata_sc=adata_sc,
+    adata_st=adata_st,
+    gat_pt_savepath="output/gat_st.pt",
+    mlp_stage2_save_path="output/mlp_stage1.pt",
+)
 ```
-SpatialAlign/
-├── data/                 # 数据文件（已包含）
-│   ├── sc_nsclc.h5ad
-│   ├── lung9_rep1_15types.h5ad
-│   └── X_umap_df.csv
-├── demo-nsclc.ipynb      # 主复现 notebook
-├── requirements.txt
-├── README.md
-└── SpatialAlign/         # Python 包
-    ├── __init__.py
-    ├── train_sc_stage1.py    # Stage 1 训练
-    ├── pseudo_labeling_impl.py  # 伪标签推断
-    ├── train_stage2.py       # Stage 2 训练
-    ├── dnn.py               # Encoder / ClassifierHead
-    ├── losses.py            # FocalLoss, cross_modal_supcon_with_queue
-    ├── mydatasets.py        # SCRNADataset, STSpatialDataset
-    ├── gat_encoder.py       # GATEncoder
-    └── ultils.py            # location_to_edge, augment_rare_cells
-```
+
+---
+
+## Output
+
+- `adata_st.obs['pseudo_label']` — cell-type annotations
+- `adata_st.obs['pseudo_confidence']` — confidence scores
+- Checkpoints saved under `output/` (or your configured path)
+
+---
+
+## Citation
+
+> Liu, C., Long, Y., Jia, P., Zheng, R., & Li, M. (2026). *SpatialAlign: Prototype-Anchored Contrastive Alignment for Cell-Type Annotation in Subcellular Spatial Transcriptomics.* School of Computer Science and Engineering, Central South University.
+
+For full details, see the full manuscript and supplementary materials.
+
+---
+
+## Repository
+
+- [GitHub](https://github.com/1liuchunlong/SpatialAlign)
