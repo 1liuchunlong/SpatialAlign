@@ -25,6 +25,15 @@ pip install -r requirements.txt
 
 Key dependencies: Python 3.8+, PyTorch, PyTorch Geometric, scanpy, POT (optimal transport).
 
+### Hardware (tested configuration)
+
+| Component | Specification |
+|----------|---------------|
+| GPU | NVIDIA L20 × 1 |
+| VRAM | 48 GB |
+| CPU | 2× Intel 8458P 44C |
+| CPU cores | 10 cores |
+
 ---
 
 ## Data
@@ -42,7 +51,9 @@ Example datasets are hosted externally. See [Data/Note.md](Data/Note.md) for dow
 ## Run
 
 1. Download data and place files in `data/` (see [Data/Note.md](Data/Note.md)).
-2. Run the demo notebook:
+2. Run the guided tutorial:
+
+[**Guided Tutorial**](demo-nsclc.ipynb) — step-by-step NSCLC (CosMx) demo with explanations.
 
 ```bash
 python -m jupyter notebook demo-nsclc.ipynb
@@ -83,7 +94,7 @@ adata_st = train_for_stage2(
 
 ---
 
-## Citation
+<!-- ## Citation
 
 > Liu, C., Long, Y., Jia, P., Zheng, R., & Li, M. (2026). *SpatialAlign: Prototype-Anchored Contrastive Alignment for Cell-Type Annotation in Subcellular Spatial Transcriptomics.* School of Computer Science and Engineering, Central South University.
 
@@ -93,4 +104,4 @@ For full details, see the full manuscript and supplementary materials.
 
 ## Repository
 
-- [GitHub](https://github.com/1liuchunlong/SpatialAlign)
+- [GitHub](https://github.com/1liuchunlong/SpatialAlign) -->
